@@ -663,23 +663,23 @@
 :root .container__13b2a section {
   background-color: var(--background-secondary);
 }
-:root .group_d25d19 {
+:root .group_e3c4bb {
   width: 110px;
   border: none;
   gap: 5px;
 }
-:root .group_d25d19 .item_d25d19 {
+:root .group_e3c4bb .item_e3c4bb {
   border-radius: 8px;
 }
-:root .group_d25d19 .item_d25d19:hover.deny_d25d19, :root .group_d25d19 .item_d25d19.selected_d25d19.deny_d25d19 {
+:root .group_e3c4bb .item_e3c4bb:hover.deny_e3c4bb, :root .group_e3c4bb .item_e3c4bb.selected_e3c4bb.deny_e3c4bb {
   color: #ed4245;
   background-color: rgba(237, 66, 69, 0.1843137255);
 }
-:root .group_d25d19 .item_d25d19:hover.passthrough_d25d19, :root .group_d25d19 .item_d25d19.selected_d25d19.passthrough_d25d19 {
+:root .group_e3c4bb .item_e3c4bb:hover.passthrough_e3c4bb, :root .group_e3c4bb .item_e3c4bb.selected_e3c4bb.passthrough_e3c4bb {
   color: #dcddde;
   background-color: rgba(100, 100, 100, 0.2274509804);
 }
-:root .group_d25d19 .item_d25d19:hover.allow_d25d19, :root .group_d25d19 .item_d25d19.selected_d25d19.allow_d25d19 {
+:root .group_e3c4bb .item_e3c4bb:hover.allow_e3c4bb, :root .group_e3c4bb .item_e3c4bb.selected_e3c4bb.allow_e3c4bb {
   color: #43b581;
   background-color: rgba(67, 181, 130, 0.231372549);
 }
@@ -878,10 +878,10 @@
   margin-top: 25px;
   z-index: 1;
 }
-:root .userPopoutOuter_c69a7b .userPopoutOverlayBackground_c69a7b .activity_e36233 .text_ec2fa7,
-:root .userPopoutOuter_c69a7b .userPopoutOverlayBackground_c69a7b .activity_e36233 .textRow_c1d9fd,
+:root .userPopoutOuter_c69a7b .userPopoutOverlayBackground_c69a7b .activity_e36233 .text_aa267a,
+:root .userPopoutOuter_c69a7b .userPopoutOverlayBackground_c69a7b .activity_e36233 .textRow_d5089b,
 :root .userPopoutOuter_c69a7b .userPopoutOverlayBackground_c69a7b .activity_e36233 .anchor_af404b,
-:root .userPopoutOuter_c69a7b .userPopoutOverlayBackground_c69a7b .activity_e36233 .activityName_c1d9fd {
+:root .userPopoutOuter_c69a7b .userPopoutOverlayBackground_c69a7b .activity_e36233 .activityName_d5089b {
   color: white;
 }
 :root .userPopoutOuter_c69a7b .userPopoutOverlayBackground_c69a7b .activity_e36233 .buttonColor_e36233 {
@@ -890,7 +890,7 @@
   box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1294117647);
   color: #fff;
 }
-:root .userPopoutOuter_c69a7b .userPopoutOverlayBackground_c69a7b .activity_e36233 .headerTextNormal_c1d9fd::before {
+:root .userPopoutOuter_c69a7b .userPopoutOverlayBackground_c69a7b .activity_e36233 .headerTextNormal_d5089b::before {
   content: "";
   position: absolute;
   height: 25px;
@@ -1444,8 +1444,8 @@
   flex-direction: row-reverse;
   justify-content: flex-end;
 }
-:root .tabBarItemContainer_e7c031 .textBadge_f05120.baseShapeRound_df8943,
-:root .landingPageTabLink_f7189e .textBadge_f05120.baseShapeRound_df8943 {
+:root .tabBarItemContainer_e7c031 .textBadge_f05120.baseShapeRound_c1de89,
+:root .landingPageTabLink_f7189e .textBadge_f05120.baseShapeRound_c1de89 {
   margin-right: 7px;
 }
 :root .connectionIcon_e2a436 {
