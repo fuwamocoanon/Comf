@@ -2101,7 +2101,7 @@
   display: none;
 }
 :root .submenuPaddingContainer_d90b3d {
-  padding: 0;
+  padding: 10;
 }
 :root .item_d90b3d {
   margin: 0;
@@ -2508,7 +2508,7 @@
   transition: margin-left 300ms linear;
 }
 :root .vc-bf-folder-sidebar + .base_a4d4d9 .panels_a4d4d9 > .container_b2ca13 > .avatarWrapper_b2ca13 {
-  margin-left: 72px;
+  margin-left: 80px;
 }
 :root .sidebar_a4d4d9 .avatarWrapper_b2ca13 {
   transition: margin-left 400ms ease;
