@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         VGen — Show Minimum Prices on Service Cards
 // @namespace    https://github.com/fuwamocoanon/comf
-// @version      2.0.0
+// @version      2.1.0
 // @description  Overlays each service's minimum ("from $X") starting price onto every ServiceGridCard across vgen.co (search, browse, profiles, shops). Reads prices from vgen's own commission-services API and matches them to cards by gallery-image ID.
 // @author       fuwamocoanon
 // @match        https://vgen.co/*
@@ -38,6 +38,15 @@
   function slugify(s) {
     return String(s).toLowerCase().trim().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
   }
+  // Gather every string value nested anywhere under a value.
+  function collectStrings(v, out, depth) {
+    depth = depth || 0;
+    if (depth > 6 || v == null) return;
+    if (typeof v === 'string') { out.push(v); return; }
+    if (Array.isArray(v)) { for (const x of v) collectStrings(x, out, depth + 1); return; }
+    if (typeof v === 'object') { for (const k in v) collectStrings(v[k], out, depth + 1); }
+  }
+
   function firstDefined(obj, keys) {
     for (const k of keys) {
       const v = obj[k];
@@ -66,17 +75,21 @@
       const record = { price, currency: typeof node.currency === 'string' ? node.currency : 'USD' };
       if (node.serviceID) byId.set(String(node.serviceID), record);
 
-      // Index every gallery image ID -> this service (the reliable card join key).
-      const gallery = node.galleryItems || node.gallery || node.images;
-      if (Array.isArray(gallery)) {
-        for (const g of gallery) {
-          const url = (g && (g.url || g.imageURL || g.src)) || (typeof g === 'string' ? g : '');
-          if (url) {
-            IMG_RE.lastIndex = 0;
-            let m;
-            while ((m = IMG_RE.exec(url))) byImage.set(m[1].toLowerCase(), record);
-          }
-        }
+      // Index EVERY service-image ID this service references -> its price. Cards
+      // may show a gallery image, a video's poster/thumbnail, or the header, and
+      // each of those is a distinct `services/<imageID>` URL. Collect them all
+      // from galleryItems (any nested string) plus common media fields, so the
+      // card's actual thumbnail always has a match regardless of which it uses.
+      const urls = [];
+      collectStrings(node.galleryItems || node.gallery || node.images, urls);
+      for (const f of ['header', 'headerURL', 'thumbnailURL', 'thumbnail',
+                       'coverURL', 'coverImageURL', 'previewURL', 'imageURL', 'posterURL']) {
+        collectStrings(node[f], urls);
+      }
+      for (const u of urls) {
+        IMG_RE.lastIndex = 0;
+        let m;
+        while ((m = IMG_RE.exec(u))) byImage.set(m[1].toLowerCase(), record);
       }
 
       // Also index by name/path for pages that link straight to a service.
@@ -217,20 +230,35 @@
     try { return new URL(a.href, location.href).pathname.toLowerCase(); } catch { return null; }
   }
 
+  const UUID_RE = new RegExp(UUID, 'gi');
+  // Any serviceID referenced in the card (e.g. a link ending in the serviceID).
+  function cardServiceIds(card) {
+    const ids = [];
+    UUID_RE.lastIndex = 0;
+    let m;
+    while ((m = UUID_RE.exec(card.innerHTML))) ids.push(m[0].toLowerCase());
+    return ids;
+  }
+
   function priceForCard(card) {
-    // 1) Match by gallery image ID against the commission-services data (primary).
+    // 1) Match by gallery/media image ID against the commission-services data.
     for (const id of cardImageIDs(card)) {
       const rec = byImage.get(id);
       if (rec) return formatPrice(rec.price, rec.currency);
     }
-    // 2) A card that links straight to a service (other page layouts).
+    // 2) Match by any serviceID referenced in the card (service-detail links).
+    for (const id of cardServiceIds(card)) {
+      const rec = byId.get(id);
+      if (rec) return formatPrice(rec.price, rec.currency);
+    }
+    // 3) A card that links straight to a service (other page layouts).
     const path = cardServicePath(card);
     if (path) {
       if (byPath.has(path)) { const r = byPath.get(path); return formatPrice(r.price, r.currency); }
       const sm = path.match(/\/service\/([^/?#]+)/);
       if (sm && bySlug.has(sm[1])) { const r = bySlug.get(sm[1]); return formatPrice(r.price, r.currency); }
     }
-    // 3) A price already rendered in the card (e.g. detail pages).
+    // 4) A price already rendered in the card (e.g. detail pages).
     return readCardPrice(card);
   }
 
@@ -281,7 +309,12 @@
   function start() {
     indexInlineScripts();
     injectAll();
-    new MutationObserver(scheduleInject).observe(document.body, { childList: true, subtree: true });
+    // Watch node additions AND src/srcset/style changes, so lazy-loaded card
+    // images (placeholder -> real URL) trigger a re-match.
+    new MutationObserver(scheduleInject).observe(document.body, {
+      childList: true, subtree: true,
+      attributes: true, attributeFilter: ['src', 'srcset', 'style'],
+    });
     const wrap = (fn) => function () { const r = fn.apply(this, arguments); scheduleInject(); return r; };
     history.pushState = wrap(history.pushState);
     history.replaceState = wrap(history.replaceState);
