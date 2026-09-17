@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         VGen — Show Minimum Prices on Service Cards
 // @namespace    https://github.com/fuwamocoanon/comf
-// @version      1.1.0
-// @description  Overlays each service's minimum ("from $X") starting price onto every ServiceGridCard across vgen.co (search, browse, profiles, shops). Reads the numbers straight from vgen's own data so prices match what the app would show.
+// @version      1.2.0
+// @description  Overlays each service's minimum ("from $X") starting price onto every ServiceGridCard across vgen.co (search, browse, profiles, shops). Reads the price straight from the card's own text when present, and falls back to vgen's data payloads otherwise.
 // @author       fuwamocoanon
 // @match        https://vgen.co/*
 // @run-at       document-start
@@ -231,6 +231,25 @@
   // ---------------------------------------------------------------------------
   // DOM injection
   // ---------------------------------------------------------------------------
+  // A price string anywhere: "$20", "US$20", "from $20", "€10", "£5", etc.
+  const PRICE_RE = /(?:from\s*)?(?:US|A|C|NZ|S)?[$€£¥₩₱₹]\s?\d[\d.,]*/i;
+
+  // Read a price already rendered inside the card (leaf text nodes only, so we
+  // grab the tight price span and not a parent that also holds other text).
+  function readCardPrice(card) {
+    const els = card.querySelectorAll(
+      '[class*="Text__StyledSpan"], [class*="Price"], span, p, b, strong, div'
+    );
+    for (const el of els) {
+      if (el.children.length) continue;         // leaf only
+      const t = (el.textContent || '').trim();
+      if (!t || t.length > 24) continue;
+      const m = t.match(PRICE_RE);
+      if (m) return m[0].replace(/\s+/g, ' ').trim();
+    }
+    return null;
+  }
+
   function lookup(pathname) {
     const path = pathname.toLowerCase();
     if (byPath.has(path)) return byPath.get(path);
@@ -249,10 +268,10 @@
     try { return new URL(a.href, location.href).pathname; } catch { return null; }
   }
 
-  function makeBadge(record) {
+  function makeBadge(text) {
     const span = document.createElement('span');
     span.className = BADGE_CLASS;
-    span.textContent = formatPrice(record.price, record.currency);
+    span.textContent = text;
     // Inline styles so it works without any companion CSS; override via .vgen-min-price.
     span.style.cssText = [
       'position:absolute',
@@ -278,13 +297,21 @@
     const cards = document.querySelectorAll(CARD_SELECTOR);
     for (const card of cards) {
       if (card.getAttribute(PROCESSED_ATTR) === 'done') continue;
-      const path = cardServicePath(card);
-      if (!path) continue;
-      const record = lookup(path);
-      if (!record) continue; // price not known yet — retry when more data arrives
+
+      // 1) Price already rendered in the card? Mirror it verbatim.
+      let text = readCardPrice(card);
+
+      // 2) Otherwise look it up from vgen's data payloads by the card's link.
+      if (!text) {
+        const path = cardServicePath(card);
+        const record = path && lookup(path);
+        if (record) text = formatPrice(record.price, record.currency);
+      }
+
+      if (!text) continue; // nothing to show yet — retry when more data arrives
 
       if (getComputedStyle(card).position === 'static') card.style.position = 'relative';
-      card.appendChild(makeBadge(record));
+      card.appendChild(makeBadge(text));
       card.setAttribute(PROCESSED_ATTR, 'done');
     }
   }
