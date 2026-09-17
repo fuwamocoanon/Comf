@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         VGen — Show Minimum Prices on Service Cards
 // @namespace    https://github.com/fuwamocoanon/comf
-// @version      2.3.0
+// @version      2.4.0
 // @description  Overlays each service's minimum ("from $X") starting price onto every ServiceGridCard across vgen.co (search, browse, profiles, shops). Reads prices from vgen's own commission-services API and matches them to cards by gallery-image ID.
 // @author       fuwamocoanon
 // @match        https://vgen.co/*
@@ -23,8 +23,30 @@
   const PROCESSED_ATTR = 'data-vgen-price';   // marks cards we've already handled
 
   const UUID = '[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}';
-  // Gallery image path: /uploads/<userID>/services/<imageID>.<ext>  (imageID is our join key)
-  const IMG_RE = new RegExp('uploads/' + UUID + '/services/(' + UUID + ')', 'gi');
+  // A service image lives under /uploads/<userID>/<category>/.../<imageID>.<ext>.
+  // Category is usually "services" but also "verified" (watermarked thumbnails),
+  // etc. We take the last UUID (the image ID) as the join key, but skip
+  // "avatars"/"banners" — those are creator-level and shared across cards.
+  const UPLOAD_RE = new RegExp('uploads/' + UUID + '/([a-z0-9]+)/([^"\'\\s)]*)', 'gi');
+  const UUID_G = new RegExp(UUID, 'gi');
+  const SKIP_CATEGORIES = { avatars: 1, banners: 1, avatar: 1, banner: 1 };
+
+  // Extract the service-image IDs referenced in a string (join key for cards).
+  function serviceImageIds(str) {
+    if (typeof str !== 'string') return [];
+    const out = [];
+    UPLOAD_RE.lastIndex = 0;
+    let m;
+    while ((m = UPLOAD_RE.exec(str))) {
+      if (SKIP_CATEGORIES[m[1].toLowerCase()]) continue;
+      const tail = m[2];
+      UUID_G.lastIndex = 0;
+      let u, last = null;
+      while ((u = UUID_G.exec(tail))) last = u[0];       // filename UUID = image ID
+      if (last) out.push(last.toLowerCase());
+    }
+    return out;
+  }
 
   // ---------------------------------------------------------------------------
   // Price index — populated from vgen's API/data payloads
@@ -97,9 +119,7 @@
       const urls = [];
       collectStrings(node, urls);
       for (const u of urls) {
-        IMG_RE.lastIndex = 0;
-        let m;
-        while ((m = IMG_RE.exec(u))) byImage.set(m[1].toLowerCase(), record);
+        for (const id of serviceImageIds(u)) byImage.set(id, record);
         // Some services use YouTube videos as gallery items; the card shows the
         // youtube thumbnail, so index the video ID too.
         for (const yid of youtubeIds(u)) byYoutube.set(yid, record);
@@ -243,12 +263,7 @@
   // Collect the gallery image IDs referenced anywhere inside a card (img src,
   // srcset, background styles, data attributes — so we don't depend on markup).
   function cardImageIDs(card) {
-    const ids = [];
-    const html = card.innerHTML;
-    IMG_RE.lastIndex = 0;
-    let m;
-    while ((m = IMG_RE.exec(html))) ids.push(m[1].toLowerCase());
-    return ids;
+    return serviceImageIds(card.innerHTML);
   }
 
   function cardServicePath(card) {
