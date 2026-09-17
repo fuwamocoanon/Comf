@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         VGen — Show Minimum Prices on Service Cards
 // @namespace    https://github.com/fuwamocoanon/comf
-// @version      2.1.0
+// @version      2.2.0
 // @description  Overlays each service's minimum ("from $X") starting price onto every ServiceGridCard across vgen.co (search, browse, profiles, shops). Reads prices from vgen's own commission-services API and matches them to cards by gallery-image ID.
 // @author       fuwamocoanon
 // @match        https://vgen.co/*
@@ -76,16 +76,12 @@
       if (node.serviceID) byId.set(String(node.serviceID), record);
 
       // Index EVERY service-image ID this service references -> its price. Cards
-      // may show a gallery image, a video's poster/thumbnail, or the header, and
-      // each of those is a distinct `services/<imageID>` URL. Collect them all
-      // from galleryItems (any nested string) plus common media fields, so the
-      // card's actual thumbnail always has a match regardless of which it uses.
+      // may show a gallery image, a video's poster/thumbnail, a header, or a
+      // showcase image, and each is a distinct `services/<imageID>` URL. Scan
+      // the whole service object for every such URL so the card's actual
+      // thumbnail always has a match, whichever field it came from.
       const urls = [];
-      collectStrings(node.galleryItems || node.gallery || node.images, urls);
-      for (const f of ['header', 'headerURL', 'thumbnailURL', 'thumbnail',
-                       'coverURL', 'coverImageURL', 'previewURL', 'imageURL', 'posterURL']) {
-        collectStrings(node[f], urls);
-      }
+      collectStrings(node, urls);
       for (const u of urls) {
         IMG_RE.lastIndex = 0;
         let m;
@@ -304,6 +300,14 @@
   scheduleInject = function () {
     if (raf) return;
     raf = requestAnimationFrame(() => { raf = 0; injectAll(); });
+  };
+
+  // Small debug surface for diagnosing misses from the console.
+  window.__vgenPriceDebug = {
+    counts: () => ({ byImage: byImage.size, byId: byId.size, byPath: byPath.size, bySlug: bySlug.size }),
+    hasImage: (id) => byImage.has(String(id).toLowerCase()),
+    hasId: (id) => byId.has(String(id).toLowerCase()),
+    priceForCard,
   };
 
   function start() {
