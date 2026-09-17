@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         VGen — Show Minimum Prices on Service Cards
 // @namespace    https://github.com/fuwamocoanon/comf
-// @version      2.2.0
+// @version      2.3.0
 // @description  Overlays each service's minimum ("from $X") starting price onto every ServiceGridCard across vgen.co (search, browse, profiles, shops). Reads prices from vgen's own commission-services API and matches them to cards by gallery-image ID.
 // @author       fuwamocoanon
 // @match        https://vgen.co/*
@@ -30,10 +30,24 @@
   // Price index — populated from vgen's API/data payloads
   // ---------------------------------------------------------------------------
   // record: { price (cents), currency }
-  const byImage = new Map(); // gallery imageID -> record   (primary join for cards)
-  const byId    = new Map(); // serviceID       -> record
-  const byPath  = new Map(); // "/user/service/slug" -> record (other page types)
-  const bySlug  = new Map(); // "slug"          -> record
+  const byImage   = new Map(); // gallery imageID    -> record  (primary join for cards)
+  const byYoutube = new Map(); // youtube videoID    -> record  (cards with video galleries)
+  const byId      = new Map(); // serviceID          -> record
+  const byPath    = new Map(); // "/user/service/slug" -> record (other page types)
+  const bySlug    = new Map(); // "slug"             -> record
+
+  // Extract YouTube video IDs from any URL/string (case-sensitive IDs).
+  const YT_RES = [
+    /youtu\.be\/([A-Za-z0-9_-]{11})/g,
+    /youtube\.com\/(?:watch\?[^"'\s]*\bv=|embed\/|v\/|vi(?:_webp)?\/)([A-Za-z0-9_-]{11})/g,
+    /[?&]v=([A-Za-z0-9_-]{11})/g,
+  ];
+  function youtubeIds(str) {
+    if (typeof str !== 'string') return [];
+    const out = [];
+    for (const re of YT_RES) { re.lastIndex = 0; let m; while ((m = re.exec(str))) out.push(m[1]); }
+    return out;
+  }
 
   function slugify(s) {
     return String(s).toLowerCase().trim().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
@@ -86,6 +100,25 @@
         IMG_RE.lastIndex = 0;
         let m;
         while ((m = IMG_RE.exec(u))) byImage.set(m[1].toLowerCase(), record);
+        // Some services use YouTube videos as gallery items; the card shows the
+        // youtube thumbnail, so index the video ID too.
+        for (const yid of youtubeIds(u)) byYoutube.set(yid, record);
+      }
+      // Also catch gallery items that store a bare YouTube ID on a typed entry.
+      const gi = node.galleryItems || node.gallery || node.images;
+      if (Array.isArray(gi)) {
+        for (const it of gi) {
+          if (!it || typeof it !== 'object') continue;
+          const type = String(it.type || it.mediaType || '').toUpperCase();
+          if (!type.includes('YOUTUBE') && !type.includes('VIDEO')) continue;
+          for (const k of ['videoID', 'videoId', 'youtubeID', 'youtubeId', 'externalID', 'externalId', 'id', 'url', 'src']) {
+            const v = it[k];
+            if (typeof v !== 'string') continue;
+            const ids = youtubeIds(v);
+            if (ids.length) ids.forEach((y) => byYoutube.set(y, record));
+            else if (/^[A-Za-z0-9_-]{11}$/.test(v)) byYoutube.set(v, record);
+          }
+        }
       }
 
       // Also index by name/path for pages that link straight to a service.
@@ -242,19 +275,24 @@
       const rec = byImage.get(id);
       if (rec) return formatPrice(rec.price, rec.currency);
     }
-    // 2) Match by any serviceID referenced in the card (service-detail links).
+    // 2) Match by YouTube video ID (cards whose gallery is YouTube videos).
+    for (const yid of youtubeIds(card.innerHTML)) {
+      const rec = byYoutube.get(yid);
+      if (rec) return formatPrice(rec.price, rec.currency);
+    }
+    // 3) Match by any serviceID referenced in the card (service-detail links).
     for (const id of cardServiceIds(card)) {
       const rec = byId.get(id);
       if (rec) return formatPrice(rec.price, rec.currency);
     }
-    // 3) A card that links straight to a service (other page layouts).
+    // 4) A card that links straight to a service (other page layouts).
     const path = cardServicePath(card);
     if (path) {
       if (byPath.has(path)) { const r = byPath.get(path); return formatPrice(r.price, r.currency); }
       const sm = path.match(/\/service\/([^/?#]+)/);
       if (sm && bySlug.has(sm[1])) { const r = bySlug.get(sm[1]); return formatPrice(r.price, r.currency); }
     }
-    // 4) A price already rendered in the card (e.g. detail pages).
+    // 5) A price already rendered in the card (e.g. detail pages).
     return readCardPrice(card);
   }
 
@@ -304,8 +342,9 @@
 
   // Small debug surface for diagnosing misses from the console.
   window.__vgenPriceDebug = {
-    counts: () => ({ byImage: byImage.size, byId: byId.size, byPath: byPath.size, bySlug: bySlug.size }),
+    counts: () => ({ byImage: byImage.size, byYoutube: byYoutube.size, byId: byId.size, byPath: byPath.size, bySlug: bySlug.size }),
     hasImage: (id) => byImage.has(String(id).toLowerCase()),
+    hasYoutube: (id) => byYoutube.has(String(id)),
     hasId: (id) => byId.has(String(id).toLowerCase()),
     priceForCard,
   };
